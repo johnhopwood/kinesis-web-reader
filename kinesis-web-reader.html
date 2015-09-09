@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Kinesis Reader</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="stylesheet" href="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.css">
+	<script src="https://sdk.amazonaws.com/js/aws-sdk-2.1.12.min.js"></script>
+	<script src="http://code.jquery.com/jquery-1.11.3.min.js"></script>
+	<script src="https://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.js"></script>
+	
+	<style>
+	.record-id {
+		font-weight: bold;
+		color: black;
+	}
+	
+	.record-body {
+		margin-top: 0em;
+		margin-bottom: 1em;
+	}
+	</style>
+</head>
+
+<body>
+<div data-role="page" id="page1">
+	<div data-role="header" data-position="fixed">
+		<h1 id="page1-title"></h1>
+		<a href="#page2" id="page1-next-arrow" data-transition="slide" class="ui-btn ui-btn-right ui-corner-all ui-shadow ui-btn-inline ui-icon-arrow-r ui-btn-icon-right ui-disabled">Next</a>
+	</div>
+
+	<div data-role="main" class="ui-content">		
+		<div class="ui-field-contain">
+			<input type="text" data-clear-btn="true" name="aws-key-id" id="aws-key-id" value="" placeholder="Paste AWS_ACCESS_KEY_ID here">
+			<input type="text" data-clear-btn="true" name="aws-key" id="aws-key" value="" placeholder="Paste AWS_SECRET_ACCESS_KEY here">
+			<input type="text" data-clear-btn="true" name="aws-session-token" id="aws-session-token" value="" placeholder="Paste AWS_SESSION_TOKEN here (optional)">
+		</div>
+		<div class="ui-field-contain">
+			<select name="select-region" id="select-region">
+				<option value="us-east-1">US East (N. Virginia) us-east-1</option>
+				<option value="us-west-1">US West (N. California) us-west-1</option>
+				<option value="us-west-2">US West (Oregon) us-west-2</option>
+				<option value="eu-west-1">EU (Ireland) eu-west-1</option>
+				<option value="eu-central-1">EU (Frankfurt) eu-central-1</option>
+				<option value="ap-southeast-1">Asia Pacific (Singapore) ap-southeast-1</option>
+				<option value="ap-southeast-2">Asia Pacific (Sydney) ap-southeast-2</option>
+				<option value="ap-northeast-1">Asia Pacific (Tokyo) ap-northeast-1</option>
+			</select>
+		</div>
+	</div>
+</div> 
+
+<div data-role="page" id="page2">
+	<div data-role="header" data-position="fixed">
+		<a href="#page1" id="page2-back-arrow" data-transition="slide" data-direction="reverse" class="ui-btn ui-btn-left ui-corner-all ui-shadow ui-btn-inline ui-icon-arrow-l ui-btn-icon-left">Back</a>
+		<h1 id="page2-title"></h1>
+		<a href="#page3" id="page2-next-arrow" data-transition="slide" class="ui-btn ui-btn-right ui-corner-all ui-shadow ui-btn-inline ui-icon-arrow-r ui-btn-icon-right  ui-disabled">Next</a>
+	</div>
+	<div data-role="main" class="ui-content">
+		<div id="page2-message" class="ui-screen-hidden">
+		</div>
+		<div id="page2-controls" class="ui-screen-hidden">
+			<select name="select-stream-shard" id="select-stream-shard">
+			</select>
+			<fieldset data-role="controlgroup">
+				<input type="radio" name="radio-iterator-type" id="radio-iterator-type-trim-horizon" value="TRIM_HORIZON">
+				<label for="radio-iterator-type-trim-horizon">TRIM_HORIZON</label>
+				<input type="radio" name="radio-iterator-type" id="radio-iterator-type-latest" value="LATEST" checked="checked">
+				<label for="radio-iterator-type-latest">LATEST</label>
+			</fieldset>
+		</div>
+	</div>
+</div>
+
+<div data-role="page" id="page3">
+	<div data-role="header" data-position="fixed">
+		<a href="#page2" id="page3-back-arrow" data-transition="slide" data-direction="reverse" class="ui-btn ui-btn-left ui-corner-all ui-shadow ui-btn-inline ui-icon-arrow-l ui-btn-icon-left">Back</a>
+		<h1 id="page3-title"></h1>
+	</div>
+	<div data-role="main" class="ui-content">
+		<div id="page3-message" class="ui-screen-hidden">
+		</div>
+		<div id="page3-records">
+		</div>
+	</div>
+</div>
+</body>
+
+<script type="text/javascript">
+
+/* page1 events */
+$(document).on("pagebeforeshow","#page1",function(){
+	page1Reset();
+});
+
+$("#aws-key-id").on( "keyup change", function() {
+	page1UpdateNextButton();
+});
+
+$("#aws-key").on( "keyup change", function() {
+	page1UpdateNextButton();
+});
+
+/* page2 events */
+$(document).on("pagebeforeshow","#page2",function(){
+	page2Reset();
+});
+
+$(document).on("pageshow","#page2",function(){
+	page2Update();
+});
+
+/* page3 events */
+$(document).on("pagebeforeshow","#page3",function(){
+	Page3Reset();
+});
+
+$(document).on("pageshow","#page3",function(){
+	Page3Update();
+});
+
+$(document).on("pagebeforehide","#page3",function(){
+	Page3StopUpdate();
+});
+
+/* page1 UI update functions */
+function page1Reset(){
+	$(".ui-header .ui-title").text("Credentials & Region");
+	page1UpdateNextButton();
+}
+
+function page1UpdateNextButton(){
+	if($("#aws-key-id").val().length > 0 && $("#aws-key").val().length > 0)
+		$("#page1-next-arrow").removeClass("ui-disabled");
+	else
+		$("#page1-next-arrow").addClass("ui-disabled");
+}
+
+/* page2 UI update functions */
+function page2Reset(){
+	$(".ui-header .ui-title").text($( "#select-region" ).val());
+	$("#page2-next-arrow").addClass("ui-disabled");
+	$("#page2-controls").addClass("ui-screen-hidden");
+	$("#page2-message").addClass("ui-screen-hidden");
+	kinesisConfig();
+}
+
+function page2ShowControls(){
+	$("#page2-controls").removeClass("ui-screen-hidden");
+	$("#select-stream-shard").trigger("change");
+	$("#page2-next-arrow").removeClass("ui-disabled");
+}
+
+function page2ShowMessage(msg){
+	$("#page2-message").text(msg);
+	$("#page2-message").removeClass("ui-screen-hidden");
+}
+
+function page2Update(){
+	$("#select-stream-shard").empty();
+	rebuildStreamShardList();
+}
+
+/* page3 UI update functions */
+function Page3Reset(){
+	var StreamName = $("#select-stream-shard").val().split('!')[0];
+	var ShardIteratorType = $('input[name=radio-iterator-type]:checked').val();
+	$(".ui-header .ui-title").text(StreamName + ' ' + ShardIteratorType);
+	$("#page3-records").empty();
+}
+
+function Page3Update(){
+	startGetRecords();
+}
+
+function Page3StopUpdate(){
+	stopGetRecords();
+}
+
+/* globals */
+var kinesis;
+var stopGettingRecords=false;
+var recordCount=0;
+var keepRecordCount=15;
+var recordRequestLimit=3;
+var recordPollInterval=5000;
+
+/*configure AWS connection parameters*/
+function kinesisConfig(){
+	
+	var accessKeyId = $("#aws-key-id").val();
+	var secretAccessKey = $("#aws-key").val();
+	var sessionToken = null;
+	
+	if($("#aws-session-token").val().length > 0)
+		sessionToken=$("#aws-session-token").val();
+		
+	AWS.config.credentials = new AWS.Credentials(accessKeyId, secretAccessKey, sessionToken);
+	AWS.config.region = $( "#select-region" ).val();
+	kinesis = new AWS.Kinesis();
+}
+
+/* populate stream / shard drop down list */	
+function rebuildStreamShardList(){
+	
+	kinesis.listStreams(params={}, function(err, data){
+		if(err){
+			page2ShowMessage(err);
+			console.log(err, err.stack);
+			return;
+		}
+		//console.log(data);
+
+		if(data.StreamNames.length == 0){
+			page2ShowMessage("No streams found in region " + $( "#select-region" ).val());
+			return;
+		}
+		
+		for(var i=0; i<data.StreamNames.length; i++){
+
+			var params = {"StreamName":data.StreamNames[i]};
+			
+			kinesis.describeStream(params, function(err, data){
+				if(err){
+					showPage2Message(err);
+					console.log(err, err.stack);
+					return;
+				}
+				//console.log(data);
+				
+				for(var i=0; i<data.StreamDescription.Shards.length; i++){
+					
+					var StreamName = data.StreamDescription.StreamName;
+					var ShardId = data.StreamDescription.Shards[i].ShardId;
+					$("#select-stream-shard").append('<option value="' + StreamName + '!' + ShardId + '">'+ StreamName + ', ' + ShardId + '</option>');
+				}
+				
+				page2ShowControls();
+			});
+		}
+	});
+}		
+
+/* sets flag to stop getRecords loop */
+function stopGetRecords(){
+	getRecords = false;
+}
+
+/* get requested iterator, then start getRecords loop */
+function startGetRecords(){
+
+		getRecords = true;
+		
+		var StreamName = $("#select-stream-shard").val().split('!')[0];
+		var ShardId = $("#select-stream-shard").val().split('!')[1];
+		var ShardIteratorType = $('input[name=radio-iterator-type]:checked').val();
+		
+		var params = {
+			"StreamName":StreamName,
+			"ShardId":ShardId,
+			"ShardIteratorType":ShardIteratorType
+		};
+
+		kinesis.getShardIterator(params, function(err, data){
+			if(err){
+				console.log(err, err.stack);
+				return;
+			}
+			//console.log(data);
+			recordCount=0;
+			getRecordsForever(data.ShardIterator);
+		});
+}
+
+/* main getRecords loop */
+function getRecordsForever(ShardIterator){
+
+	if(!getRecords)
+		return;
+
+	var params = {"ShardIterator":ShardIterator, "Limit":recordRequestLimit};
+
+	kinesis.getRecords(params, function(err, data){
+	
+		var time = new Date().toLocaleTimeString();
+		console.log('polling kinesis.getRecords ' + time);
+		
+		if(err){
+			console.log(err, err.stack);
+			return;
+		}
+		//console.log(data);
+		
+		for(var i=0; i<data.Records.length; i++){
+		
+			var record = String.fromCharCode.apply(null, data.Records[i].Data).replace(/(\r\n|\n|\r)/gm,"").trim(); /*textify*/
+			var recordId = data.Records[i].SequenceNumber;
+			
+			if(recordCount >= keepRecordCount) /* show most recent keepRecordCount records */
+				$("#page3-records .record:last-child").remove();
+
+			$("#page3-records").prepend('<div class="record"><div class="record-id">' + time + ' ' + recordId + '</div><div class="record-body">' + record + '</div></div>');
+			
+			recordCount++;
+		}
+		
+		if(data.Records.length >0){
+			setTimeout(function(){getRecordsForever(data.NextShardIterator);}, 0);
+		}
+		else{
+			setTimeout(function(){getRecordsForever(data.NextShardIterator);}, recordPollInterval);
+		}
+	});
+}
+
+</script>
+</html>

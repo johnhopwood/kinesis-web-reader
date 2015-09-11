@@ -87,6 +87,33 @@
 
 <script type="text/javascript">
 
+/* globals */
+var kinesis;
+var stopGettingRecords=false;
+var recordCount=0;
+var keepRecordCount=15;
+var recordRequestLimit=3;
+var recordPollInterval=5000;
+var reloadPageFlag=false;
+
+/* got to #page1 of the workflow after a user reload */
+$(window).on( "navigate", function( event, data ) {
+	
+	var thisPage = location.hash;
+	console.log("window navigate" + thisPage);
+	if (thisPage != '' && thisPage != '#page1')
+                reloadPageFlag = true;
+	else
+				reloadPageFlag = false;
+});
+
+$(document).on("pagebeforeshow",function(){
+
+	if(reloadPageFlag)
+		$.mobile.changePage("#page1");
+	reloadPageFlag = false;
+});
+
 /* page1 events */
 $(document).on("pagebeforeshow","#page1",function(){
 	page1Reset();
@@ -175,14 +202,6 @@ function Page3Update(){
 function Page3StopUpdate(){
 	stopGetRecords();
 }
-
-/* globals */
-var kinesis;
-var stopGettingRecords=false;
-var recordCount=0;
-var keepRecordCount=15;
-var recordRequestLimit=3;
-var recordPollInterval=5000;
 
 /*configure AWS connection parameters*/
 function kinesisConfig(){
